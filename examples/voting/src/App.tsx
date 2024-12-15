@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { supersimL2A, supersimL2B } from '@eth-optimism/viem'
 
 import Voting from './components/Voting';
+import { ToastContainer } from './components/Toast/ToastContainer';
+import { useContractEvents } from './hooks/useContractEvents';
 
 const queryClient = new QueryClient();
 
@@ -18,12 +20,15 @@ export const wagmiConfig = createConfig({
 })
 
 const App: React.FC = () => {
+  useContractEvents();
+
   return (
-    <div className="app" >
+    <div className="app">
       <Voting />
+      <ToastContainer />
     </div>
-  )
-}
+  );
+};
 
 const Root: React.FC = () => {
   return (
@@ -33,6 +38,6 @@ const Root: React.FC = () => {
       </QueryClientProvider>
     </WagmiProvider>
   );
-}
+};
 
 export default Root;

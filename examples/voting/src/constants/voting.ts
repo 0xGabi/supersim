@@ -118,6 +118,30 @@ export const abi = [
     },
     {
         "type": "function",
+        "name": "getVoterDirection",
+        "inputs": [
+            {
+                "name": "_proposalId",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "_voter",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "uint8",
+                "internalType": "enum VoteDirection"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
         "name": "governanceChainId",
         "inputs": [],
         "outputs": [

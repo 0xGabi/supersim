@@ -32,7 +32,7 @@ The forge script will log the deployed deterministic contract address.
 ...
 Script ran successfully..
 == Logs ==
-  Deployed at: 0x738ff3dEDe5918c1Fe882Ad27f478e7262876ADf
+  Deployed at: 0x86c77412B2A19D9c7783fcAA4d51be016c57C559
 ...
 ```
 
@@ -43,7 +43,7 @@ Supply the address as an environment variable when running the frontend.
 ```bash
 cd examples/voting
 
-export VITE_VOTING_ADDRESS=0x738ff3dEDe5918c1Fe882Ad27f478e7262876ADf
+export VITE_VOTING_ADDRESS=0x86c77412B2A19D9c7783fcAA4d51be016c57C559
 pnpn i && pnpm run dev
 ```
 
