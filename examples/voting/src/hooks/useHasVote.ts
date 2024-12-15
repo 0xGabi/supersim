@@ -2,7 +2,7 @@ import { useReadContract } from 'wagmi'
 import { address, abi } from '../constants/voting'
 
 export const useHasVote = (proposalId: number, voter: `0x${string}`) => {
-    const { data: hasVoted } = useReadContract({
+    const { data: hasVoted, refetch } = useReadContract({
         address,
         abi,
         functionName: 'hasVoted',
@@ -11,5 +11,6 @@ export const useHasVote = (proposalId: number, voter: `0x${string}`) => {
 
     return {
         hasVoted: !!hasVoted,
+        refetch
     };
 }

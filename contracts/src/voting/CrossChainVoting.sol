@@ -26,13 +26,6 @@ error AlreadyVoted();
 /// @notice Thrown when the voting period has not ended
 error VotingPeriodNotEnded();
 
-/// @notice Enum to represent the direction of a vote
-enum VoteDirection {
-    None,
-    For,
-    Against
-}
-
 /// @notice Structure to hold proposal information
 /// @dev Includes vote counts both per chain and total
 struct Proposal {
@@ -44,7 +37,6 @@ struct Proposal {
     uint256 totalVotesAgainst;
     mapping(uint256 => ChainVotes) chainVotes;
     mapping(address => bool) hasVoted;
-    mapping(address => VoteDirection) voterDirection;
 }
 
 /// @notice Structure to track votes from a specific chain
@@ -196,11 +188,9 @@ contract CrossChainVoting {
         if (_support) {
             proposal.totalVotesFor++;
             proposal.chainVotes[_sourceChainId].votesFor++;
-            proposal.voterDirection[_voter] = VoteDirection.For;
         } else {
             proposal.totalVotesAgainst++;
             proposal.chainVotes[_sourceChainId].votesAgainst++;
-            proposal.voterDirection[_voter] = VoteDirection.Against;
         }
 
         emit VoteCasted(_proposalId, _voter, _support);
@@ -259,16 +249,5 @@ contract CrossChainVoting {
      */
     function hasVoted(uint256 _proposalId, address _voter) external view returns (bool) {
         return proposals[_proposalId].hasVoted[_voter];
-    }
-
-    
-    /** 
-     * @notice Gets the direction of a voter's vote
-     * @param _proposalId The ID of the proposal
-     * @param _voter The address to check
-     * @return The direction of the voter's vote
-     */
-    function getVoterDirection(uint256 _proposalId, address _voter) external view returns (VoteDirection) {
-        return proposals[_proposalId].voterDirection[_voter];
     }
 }

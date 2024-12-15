@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCountdown } from '../hooks/useCountdown';
 import { useVote } from '../hooks/useVote';
 import { Proposal, ProposalStatus } from '../hooks/useProposals';
 import { useAccount } from 'wagmi';
 import { useHasVote } from '../hooks/useHasVote';
 import { useVoteDirection } from '../hooks/useVoteDirection';
-import { VoteDirection } from '../hooks/useVoteDirection';
 
 interface ProposalCardProps {
     proposal: Proposal;
@@ -19,11 +18,25 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
     onSelect,
 }) => {
     const timeLeft = useCountdown(proposal.endTime);
-    const { castVote, isPending, isConfirming } = useVote();
+    const { castVote, isPending, isConfirming, isSuccess } = useVote();
     const { address } = useAccount();
-    const { direction } = useVoteDirection(proposal.id, address);
-    const { hasVoted } = address ? useHasVote(proposal.id, address) : { hasVoted: false };
+    const { direction, isFor, isAgainst, refetch: refetchDirection } = useVoteDirection(proposal.id, address);
+    const { hasVoted, refetch: refetchHasVoted } = address ? 
+        useHasVote(proposal.id, address) : 
+        { hasVoted: false, refetch: () => {} };
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (isSuccess) {
+            const refreshVoteStatus = async () => {
+                await Promise.all([
+                    refetchDirection(),
+                    refetchHasVoted()
+                ]);
+            };
+            refreshVoteStatus();
+        }
+    }, [isSuccess, refetchDirection, refetchHasVoted]);
 
     const handleVote = async (support: boolean) => {
         setError(null);
@@ -57,7 +70,6 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
     const getVoteStatusDisplay = () => {
         if (!hasVoted) return null;
 
-        const isFor = direction === VoteDirection.For;
         const voteText = isFor ? 'Voted For' : 'Voted Against';
         const voteColor = isFor ? '#2E7D32' : '#C62828';
         const voteIcon = isFor ? '✓' : '✗';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Proposal } from '../hooks/useProposals';
+import { Proposal, ProposalStatus } from '../hooks/useProposals';
 import ProposalCard from './ProposalCard';
 
 interface ProposalListProps {
@@ -16,6 +16,15 @@ const ProposalList: React.FC<ProposalListProps> = ({
     isLoading
 }) => {
     const proposalList = Object.values(proposals);
+    const now = Math.floor(Date.now() / 1000);
+
+    const activeProposals = proposalList
+        .filter(p => p.endTime >= now)
+        .sort((a, b) => b.startTime - a.startTime);
+
+    const pastProposals = proposalList
+        .filter(p => p.endTime < now)
+        .sort((a, b) => b.endTime - a.endTime);
 
     if (isLoading) {
         return <div style={styles.message}>Loading proposals...</div>;
@@ -34,18 +43,42 @@ const ProposalList: React.FC<ProposalListProps> = ({
 
     return (
         <div style={styles.container}>
-            <div style={styles.list}>
-                {proposalList
-                    .sort((a, b) => b.startTime - a.startTime)
-                    .map(proposal => (
-                        <ProposalCard
-                            key={proposal.id}
-                            proposal={proposal}
-                            selected={selectedProposalId === proposal.id}
-                            onSelect={() => setSelectedProposalId(proposal.id)}
-                        />
-                    ))}
+            {/* Active Proposals Section */}
+            <div style={styles.section}>
+                <h2 style={styles.sectionTitle}>Active Proposals</h2>
+                {activeProposals.length === 0 ? (
+                    <p style={styles.noProposalsMessage}>No active proposals at the moment</p>
+                ) : (
+                    <div style={styles.list}>
+                        {activeProposals.map(proposal => (
+                            <ProposalCard
+                                key={proposal.id}
+                                proposal={proposal}
+                                selected={selectedProposalId === proposal.id}
+                                onSelect={() => setSelectedProposalId(proposal.id)}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
+
+            {/* Past Proposals Section */}
+            {pastProposals.length > 0 && (
+                <div style={styles.section}>
+                    <h2 style={styles.sectionTitle}>Past Proposals</h2>
+                    <div style={{...styles.list, opacity: 0.8}}>
+                        {pastProposals.map(proposal => (
+                            <div key={proposal.id} style={styles.pastProposalWrapper}>
+                                <ProposalCard
+                                    proposal={proposal}
+                                    selected={selectedProposalId === proposal.id}
+                                    onSelect={() => setSelectedProposalId(proposal.id)}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -54,13 +87,37 @@ const styles = {
     container: {
         display: 'flex',
         flexDirection: 'column' as const,
-        height: '100%',
-        gap: '20px',
+        gap: '32px',
+    },
+    section: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '16px',
+    },
+    sectionTitle: {
+        fontSize: '18px',
+        fontWeight: '600',
+        color: '#333',
+        margin: '0',
     },
     list: {
         display: 'flex',
         flexDirection: 'column' as const,
         gap: '16px',
+    },
+    pastProposalWrapper: {
+        position: 'relative' as const,
+        '&::after': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.03)',
+            pointerEvents: 'none',
+            borderRadius: '12px',
+        }
     },
     message: {
         textAlign: 'center' as const,
@@ -90,6 +147,14 @@ const styles = {
         margin: 0,
         maxWidth: '400px',
         lineHeight: '1.5',
+    },
+    noProposalsMessage: {
+        color: '#666',
+        fontSize: '14px',
+        fontStyle: 'italic',
+        margin: '0',
+        padding: '12px',
+        textAlign: 'center' as const,
     },
 };
 
