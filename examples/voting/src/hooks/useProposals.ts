@@ -17,7 +17,6 @@ export interface Proposal {
     totalVotesFor: number;
     totalVotesAgainst: number;
     chainVotes: Record<number, ChainVotes>;
-    hasVoted: boolean;
     userVoteDirection?: boolean;
     status: ProposalStatus;
 }
@@ -86,7 +85,6 @@ export const useProposals = (account?: string) => {
             let totalVotesFor = 0;
             let totalVotesAgainst = 0;
             const chainVotes: Record<number, ChainVotes> = {};
-            let hasVoted = false;
             let userVoteDirection;
 
             // Fetch votes from all chains for this proposal
@@ -120,7 +118,6 @@ export const useProposals = (account?: string) => {
                     }
 
                     if (account && voter.toLowerCase() === account.toLowerCase()) {
-                        hasVoted = true;
                         userVoteDirection = support;
                     }
                 }
@@ -142,7 +139,6 @@ export const useProposals = (account?: string) => {
                         totalVotesFor,
                         totalVotesAgainst,
                         chainVotes,
-                        hasVoted,
                         userVoteDirection,
                         status: getProposalStatus(
                             proposal.startTime,
@@ -190,7 +186,6 @@ export const useProposals = (account?: string) => {
                             totalVotesFor: 0,
                             totalVotesAgainst: 0,
                             chainVotes: {},
-                            hasVoted: false,
                             userVoteDirection: undefined,
                             status: getProposalStatus(startTime, endTime, 0, 0)
                         };
@@ -251,7 +246,6 @@ export const useProposals = (account?: string) => {
                         totalVotesFor: 0,
                         totalVotesAgainst: 0,
                         chainVotes: {},
-                        hasVoted: false,
                         userVoteDirection: undefined,
                         status: getProposalStatus(startTime, endTime, 0, 0)
                     }

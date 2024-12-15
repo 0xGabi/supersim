@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useCountdown } from '../hooks/useCountdown';
 import { useVote } from '../hooks/useVote';
 import { Proposal, ProposalStatus } from '../hooks/useProposals';
+import { useAccount } from 'wagmi';
+import { useHasVote } from '../hooks/useHasVote';
 
 interface ProposalCardProps {
     proposal: Proposal;
@@ -16,6 +18,8 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
 }) => {
     const timeLeft = useCountdown(proposal.endTime);
     const { castVote, isPending, isConfirming } = useVote();
+    const { address } = useAccount();
+    const hasVoted = address ? useHasVote(proposal.id, address) : false;
     const [error, setError] = useState<string | null>(null);
 
     const handleVote = async (support: boolean) => {
@@ -48,7 +52,7 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
     const statusColors = getStatusColor(proposal.status);
 
     const getVoteStatusDisplay = () => {
-        if (!proposal.hasVoted) return null;
+        if (!hasVoted) return null;
 
         const voteText = proposal.userVoteDirection ? 'Voted For' : 'Voted Against';
         const voteColor = proposal.userVoteDirection ? '#2E7D32' : '#C62828';
@@ -122,7 +126,7 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
                 </div>
             )}
 
-            {proposal.status === ProposalStatus.Active && !proposal.hasVoted && (
+            {proposal.status === ProposalStatus.Active && !hasVoted && (
                 <div style={styles.voteButtons}>
                     <button
                         onClick={(e) => {
@@ -147,7 +151,7 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
                 </div>
             )}
 
-            {proposal.hasVoted && getVoteStatusDisplay()}
+            {hasVoted && getVoteStatusDisplay()}
 
             {(isPending || isConfirming) && (
                 <div style={styles.loadingOverlay}>
