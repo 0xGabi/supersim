@@ -2,20 +2,28 @@ import React, { useState } from 'react';
 import { useNewProposal } from '../hooks/useNewProposal';
 
 const ProposalControls: React.FC = () => {
-  const { createNewProposal, isPending, isConfirming } = useNewProposal();
+  const { createNewProposal, isPending, isConfirming, isSuccess } = useNewProposal();
   const [description, setDescription] = useState('');
   const [duration, setDuration] = useState('7'); // Default 7 days
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    
     try {
       // Convert days to seconds
       const votingPeriod = Number(duration) * 24 * 60 * 60;
       await createNewProposal(description, votingPeriod);
-      setDescription('');
-      setDuration('7');
+      
+      // Only clear the form if the transaction was successful
+      if (isSuccess) {
+        setDescription('');
+        setDuration('7');
+      }
     } catch (error) {
       console.error('Failed to create proposal:', error);
+      setError('Failed to create proposal. Please try again.');
     }
   };
 
@@ -65,6 +73,7 @@ const ProposalControls: React.FC = () => {
           {isConfirming ? 'Creating Proposal...' : 'Create Proposal'}
         </button>
       </form>
+      {error && <p style={styles.error}>{error}</p>}
     </div>
   );
 };
@@ -132,6 +141,11 @@ const styles = {
     ':hover': {
       backgroundColor: '#E6041D',
     },
+  },
+  error: {
+    color: '#FF0420',
+    fontSize: '14px',
+    marginTop: '10px',
   },
 };
 

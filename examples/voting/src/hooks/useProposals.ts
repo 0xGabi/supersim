@@ -69,32 +69,6 @@ export const useProposals = (account?: string) => {
     const [error, setError] = useState<string | null>(null);
     const config = useConfig();
 
-    const addOrUpdateProposal = (
-        proposalId: number,
-        description: string,
-        startTime: number,
-        endTime: number,
-        existingProposal?: Partial<Proposal>
-    ) => {
-        setProposals(prev => ({
-            ...prev,
-            [proposalId]: {
-                id: proposalId,
-                description,
-                startTime,
-                endTime,
-                totalVotesFor: existingProposal?.totalVotesFor || 0,
-                totalVotesAgainst: existingProposal?.totalVotesAgainst || 0,
-                chainVotes: existingProposal?.chainVotes || {},
-                hasVoted: existingProposal?.hasVoted || false,
-                userVoteDirection: existingProposal?.userVoteDirection,
-                status: getProposalStatus(startTime, endTime, 
-                    existingProposal?.totalVotesFor || 0, 
-                    existingProposal?.totalVotesAgainst || 0)
-            }
-        }));
-    };
-
     const getProposalStatus = (
         startTime: number,
         endTime: number,
@@ -107,94 +81,89 @@ export const useProposals = (account?: string) => {
         return votesFor > votesAgainst ? ProposalStatus.Passed : ProposalStatus.Failed;
     };
 
-    // Add a function to update proposal status based on current time
-    const updateProposalStatuses = useCallback(() => {
-        setProposals(prev => {
-            const updated = { ...prev };
-            const now = Math.floor(Date.now() / 1000);
-            
-            Object.values(updated).forEach(proposal => {
-                proposal.status = getProposalStatus(
-                    proposal.startTime,
-                    proposal.endTime,
-                    proposal.totalVotesFor,
-                    proposal.totalVotesAgainst,
-                    now
-                );
-            });
-            
-            return updated;
-        });
-    }, []);
+    const updateProposalVotes = useCallback(async (proposalId: number) => {
+        try {
+            let totalVotesFor = 0;
+            let totalVotesAgainst = 0;
+            const chainVotes: Record<number, ChainVotes> = {};
+            let hasVoted = false;
+            let userVoteDirection;
 
-    // Update statuses periodically
-    useEffect(() => {
-        const interval = setInterval(updateProposalStatuses, 1000);
-        return () => clearInterval(interval);
-    }, [updateProposalStatuses]);
+            // Fetch votes from all chains for this proposal
+            for (const chain of config.chains) {
+                const publicClient = getPublicClient(config, { chainId: chain.id });
+                if (!publicClient) continue;
 
-    // Watch for new proposals
-    useWatchContractEvent({
-        address,
-        abi,
-        eventName: 'ProposalCreated',
-        onLogs(logs) {
-            for (const log of logs) {
-                const proposalId = Number(log.args.proposalId);
-                const description = log.args.description as string;
-                const startTime = Number(log.args.startTime);
-                const endTime = Number(log.args.endTime);
-                
-                // Add new proposal immediately
-                addOrUpdateProposal(proposalId, description, startTime, endTime);
+                const logs = await publicClient.getLogs({
+                    address,
+                    event: voteCastedEvent,
+                    args: {
+                        proposalId: BigInt(proposalId)
+                    },
+                    fromBlock: 'earliest',
+                    toBlock: 'latest'
+                });
+
+                let chainVotesFor = 0;
+                let chainVotesAgainst = 0;
+
+                for (const log of logs) {
+                    const voter = log.args.voter as string;
+                    const support = log.args.support as boolean;
+
+                    if (support) {
+                        totalVotesFor++;
+                        chainVotesFor++;
+                    } else {
+                        totalVotesAgainst++;
+                        chainVotesAgainst++;
+                    }
+
+                    if (account && voter.toLowerCase() === account.toLowerCase()) {
+                        hasVoted = true;
+                        userVoteDirection = support;
+                    }
+                }
+
+                chainVotes[chain.id] = {
+                    votesFor: chainVotesFor,
+                    votesAgainst: chainVotesAgainst
+                };
             }
-        },
-    });
 
-    // Watch for new votes
-    useWatchContractEvent({
-        address,
-        abi,
-        eventName: 'VoteCasted',
-        onLogs(logs) {
-            for (const log of logs) {
-                const proposalId = Number(log.args.proposalId);
-                const voter = log.args.voter as string;
-                const support = log.args.support as boolean;
+            setProposals(prev => {
+                const proposal = prev[proposalId];
+                if (!proposal) return prev;
 
-                setProposals(prev => {
-                    const proposal = prev[proposalId];
-                    if (!proposal) return prev;
-
-                    const updatedProposal = {
+                return {
+                    ...prev,
+                    [proposalId]: {
                         ...proposal,
-                        totalVotesFor: support ? proposal.totalVotesFor + 1 : proposal.totalVotesFor,
-                        totalVotesAgainst: support ? proposal.totalVotesAgainst : proposal.totalVotesAgainst + 1,
-                        hasVoted: account && voter.toLowerCase() === account.toLowerCase() ? true : proposal.hasVoted,
-                        userVoteDirection: account && voter.toLowerCase() === account.toLowerCase() ? support : proposal.userVoteDirection,
+                        totalVotesFor,
+                        totalVotesAgainst,
+                        chainVotes,
+                        hasVoted,
+                        userVoteDirection,
                         status: getProposalStatus(
                             proposal.startTime,
                             proposal.endTime,
-                            support ? proposal.totalVotesFor + 1 : proposal.totalVotesFor,
-                            support ? proposal.totalVotesAgainst : proposal.totalVotesAgainst + 1
+                            totalVotesFor,
+                            totalVotesAgainst
                         )
-                    };
+                    }
+                };
+            });
+        } catch (error) {
+            console.error(`Error updating proposal ${proposalId}:`, error);
+        }
+    }, [config.chains, account]);
 
-                    return {
-                        ...prev,
-                        [proposalId]: updatedProposal
-                    };
-                });
-            }
-        },
-    });
-
-    // Initial sync
-    useEffect(() => {
-        const fetchPastEvents = async () => {
+    const fetchPastEvents = useCallback(async () => {
+        try {
+            setSyncing(true);
             const proposalsInit: Record<number, Proposal> = {};
 
-            // Fetch all proposal creation events
+            // Fetch all proposals first
             for (const chain of config.chains) {
                 const publicClient = getPublicClient(config, { chainId: chain.id });
                 if (!publicClient) continue;
@@ -229,85 +198,110 @@ export const useProposals = (account?: string) => {
                 }
             }
 
-            // Fetch all vote events
-            for (const chain of config.chains) {
-                const publicClient = getPublicClient(config, { chainId: chain.id });
-                if (!publicClient) continue;
-
-                const logs = await publicClient.getLogs({
-                    address,
-                    event: voteCastedEvent,
-                    fromBlock: 'earliest',
-                    toBlock: 'latest'
-                });
-
-                for (const log of logs) {
-                    const proposalId = Number(log.args.proposalId);
-                    const voter = log.args.voter as string;
-                    const support = log.args.support as boolean;
-                    const proposal = proposalsInit[proposalId];
-
-                    if (proposal) {
-                        if (support) {
-                            proposal.totalVotesFor++;
-                            proposal.chainVotes[chain.id] = {
-                                votesFor: (proposal.chainVotes[chain.id]?.votesFor || 0) + 1,
-                                votesAgainst: proposal.chainVotes[chain.id]?.votesAgainst || 0
-                            };
-                        } else {
-                            proposal.totalVotesAgainst++;
-                            proposal.chainVotes[chain.id] = {
-                                votesFor: proposal.chainVotes[chain.id]?.votesFor || 0,
-                                votesAgainst: (proposal.chainVotes[chain.id]?.votesAgainst || 0) + 1
-                            };
-                        }
-
-                        if (account && voter.toLowerCase() === account.toLowerCase()) {
-                            proposal.hasVoted = true;
-                        }
-
-                        proposal.status = getProposalStatus(
-                            proposal.startTime,
-                            proposal.endTime,
-                            proposal.totalVotesFor,
-                            proposal.totalVotesAgainst
-                        );
-                    }
-                }
-            }
-
+            // Set initial proposals
             setProposals(proposalsInit);
-            setSyncing(false);
-        };
 
-        fetchPastEvents();
-    }, [config.chains, account]);
-
-    // Add refresh functionality
-    const refreshProposals = async () => {
-        try {
-            setSyncing(true);
-            await fetchPastEvents();
+            // Update votes for each proposal
+            await Promise.all(
+                Object.keys(proposalsInit).map(id => 
+                    updateProposalVotes(Number(id))
+                )
+            );
         } catch (err) {
-            setError('Failed to refresh proposals');
-            console.error('Error refreshing proposals:', err);
+            setError('Failed to fetch proposals');
+            console.error('Error fetching proposals:', err);
         } finally {
             setSyncing(false);
         }
-    };
+    }, [config.chains, updateProposalVotes]);
 
-    // Add cleanup for event listeners
+    // Watch for new votes with immediate updates
+    useWatchContractEvent({
+        address,
+        abi,
+        eventName: 'VoteCasted',
+        onLogs(logs) {
+            for (const log of logs) {
+                const proposalId = Number(log.args.proposalId);
+                updateProposalVotes(proposalId);
+            }
+        },
+    });
+
+    // Watch for new proposals
+    useWatchContractEvent({
+        address,
+        abi,
+        eventName: 'ProposalCreated',
+        onLogs(logs) {
+            for (const log of logs) {
+                const proposalId = Number(log.args.proposalId);
+                const description = log.args.description as string;
+                const startTime = Number(log.args.startTime);
+                const endTime = Number(log.args.endTime);
+                
+                // Add new proposal and fetch its votes
+                setProposals(prev => ({
+                    ...prev,
+                    [proposalId]: {
+                        id: proposalId,
+                        description,
+                        startTime,
+                        endTime,
+                        totalVotesFor: 0,
+                        totalVotesAgainst: 0,
+                        chainVotes: {},
+                        hasVoted: false,
+                        userVoteDirection: undefined,
+                        status: getProposalStatus(startTime, endTime, 0, 0)
+                    }
+                }));
+                
+                // Fetch initial votes for the new proposal
+                updateProposalVotes(proposalId);
+            }
+        },
+    });
+
+    // Initial load
     useEffect(() => {
-        return () => {
-            // Cleanup subscriptions if needed
-        };
+        fetchPastEvents();
+    }, [fetchPastEvents]);
+
+    // Update proposal statuses periodically
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setProposals(prev => {
+                const now = Math.floor(Date.now() / 1000);
+                const updated = { ...prev };
+                let hasChanges = false;
+
+                Object.values(updated).forEach(proposal => {
+                    const newStatus = getProposalStatus(
+                        proposal.startTime,
+                        proposal.endTime,
+                        proposal.totalVotesFor,
+                        proposal.totalVotesAgainst
+                    );
+                    
+                    if (proposal.status !== newStatus) {
+                        proposal.status = newStatus;
+                        hasChanges = true;
+                    }
+                });
+
+                return hasChanges ? updated : prev;
+            });
+        }, 1000);
+
+        return () => clearInterval(interval);
     }, []);
 
-    return { 
-        proposals, 
+    return {
+        proposals,
         syncing,
         error,
-        refreshProposals,
-        addOrUpdateProposal 
+        refreshProposals: fetchPastEvents,
+        updateProposalVotes
     };
 };

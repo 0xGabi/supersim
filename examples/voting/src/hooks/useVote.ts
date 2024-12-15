@@ -3,7 +3,13 @@ import { address, abi } from '../constants/voting';
 
 export const useVote = () => {
     const { data: hash, writeContract, isPending } = useWriteContract();
-    const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
+    const { isLoading: isConfirming } = useWaitForTransactionReceipt({
+        hash,
+        onSuccess: () => {
+            // Transaction confirmed successfully
+            console.log('Vote cast successfully');
+        },
+    });
 
     const castVote = async (proposalId: number, support: boolean) => {
         try {
@@ -11,11 +17,15 @@ export const useVote = () => {
                 address,
                 abi,
                 functionName: 'castVote',
-                args: [proposalId, support],
+                args: [BigInt(proposalId), support],
             });
+            return { success: true };
         } catch (error) {
             console.error('Error casting vote:', error);
-            throw error;
+            return {
+                success: false,
+                error: parseBlockchainError(error)
+            };
         }
     };
 

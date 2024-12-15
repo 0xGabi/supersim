@@ -2,21 +2,34 @@ import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { address, abi } from '../constants/voting'
 
 export const useNewProposal = () => {
-    const { data: hash, writeContract, isPending, isError, error } = useWriteContract()
-    const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
-
-    if (isError) {
-        console.error('Error creating new proposal: ', error)
-    }
+    const { data: hash, writeContract, isPending } = useWriteContract()
+    const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ 
+        hash,
+        onSuccess(data) {
+            // Transaction was successful
+            console.log('Proposal created successfully:', data);
+        },
+    })
 
     const createNewProposal = async (description: string, votingPeriod: number) => {
         try {
-            await writeContract({ address: address, abi: abi, functionName: 'createProposal', args: [description, votingPeriod] })
+            await writeContract({
+                address,
+                abi,
+                functionName: 'createProposal',
+                args: [description, BigInt(votingPeriod)]
+            });
         } catch (error) {
-            console.error('Error creating new proposal: ',error)
-            return { error }
+            console.error('Error creating new proposal:', error);
+            throw error;
         }
     }
 
-    return { createNewProposal, isPending, isConfirming, isSuccess, hash }
+    return {
+        createNewProposal,
+        isPending,
+        isConfirming,
+        isSuccess,
+        hash
+    }
 }

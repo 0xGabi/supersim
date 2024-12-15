@@ -21,7 +21,10 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
     const handleVote = async (support: boolean) => {
         setError(null);
         try {
-            await castVote(proposal.id, support);
+            const result = await castVote(proposal.id, support);
+            if (!result.success) {
+                setError(result.error || 'Failed to cast vote');
+            }
         } catch (error) {
             setError('Failed to cast vote. Please try again.');
         }
@@ -44,20 +47,33 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
 
     const statusColors = getStatusColor(proposal.status);
 
-    const getVoteStatus = () => {
+    const getVoteStatusDisplay = () => {
         if (!proposal.hasVoted) return null;
-        
-        // Check if the vote was in favor or against
-        // This would require tracking the user's vote direction in the proposal
-        const voteDirection = proposal.userVoteDirection;
-        const icon = voteDirection ? '✓' : '✗';
-        const color = voteDirection ? '#2E7D32' : '#C62828';
-        const text = voteDirection ? 'Voted For' : 'Voted Against';
-        
-        return { icon, color, text };
+
+        const voteText = proposal.userVoteDirection ? 'Voted For' : 'Voted Against';
+        const voteColor = proposal.userVoteDirection ? '#2E7D32' : '#C62828';
+        const voteIcon = proposal.userVoteDirection ? '✓' : '✗';
+
+        return (
+            <div style={{
+                ...styles.votedBadge,
+                backgroundColor: `${voteColor}15`,
+                color: voteColor,
+                border: `1px solid ${voteColor}30`
+            }}>
+                <span style={{...styles.votedIcon, color: voteColor}}>
+                    {voteIcon}
+                </span>
+                {voteText}
+            </div>
+        );
     };
 
-    const voteStatus = getVoteStatus();
+    const getLoadingMessage = () => {
+        if (isPending) return 'Please sign the transaction...';
+        if (isConfirming) return 'Processing vote...';
+        return '';
+    };
 
     return (
         <div
@@ -65,6 +81,7 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
                 ...styles.container,
                 backgroundColor: selected ? 'rgba(25, 118, 210, 0.08)' : 'white',
                 borderColor: selected ? '#1976D2' : '#E0E0E0',
+                position: 'relative',
             }}
             onClick={onSelect}
         >
@@ -98,7 +115,12 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
                 )}
             </div>
 
-            {error && <div style={styles.error}>{error}</div>}
+            {error && (
+                <div style={styles.errorContainer}>
+                    <div style={styles.errorIcon}>⚠️</div>
+                    <div style={styles.errorMessage}>{error}</div>
+                </div>
+            )}
 
             {proposal.status === ProposalStatus.Active && !proposal.hasVoted && (
                 <div style={styles.voteButtons}>
@@ -110,7 +132,7 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
                         style={{...styles.voteButton, ...styles.voteForButton}}
                         disabled={isPending || isConfirming}
                     >
-                        {isPending || isConfirming ? 'Voting...' : 'Vote For'}
+                        Vote For
                     </button>
                     <button
                         onClick={(e) => {
@@ -120,25 +142,19 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
                         style={{...styles.voteButton, ...styles.voteAgainstButton}}
                         disabled={isPending || isConfirming}
                     >
-                        {isPending || isConfirming ? 'Voting...' : 'Vote Against'}
+                        Vote Against
                     </button>
                 </div>
             )}
-            
-            {proposal.hasVoted && (
-                <div style={{
-                    ...styles.votedBadge,
-                    backgroundColor: voteStatus?.color ? `${voteStatus.color}15` : '#F5F5F5',
-                    color: voteStatus?.color || '#1976D2',
-                    border: `1px solid ${voteStatus?.color}30` || '#E0E0E0'
-                }}>
-                    <span style={{
-                        ...styles.votedIcon,
-                        color: voteStatus?.color || '#2E7D32'
-                    }}>
-                        {voteStatus?.icon || '✓'}
-                    </span>
-                    {voteStatus?.text || 'Vote Cast'}
+
+            {proposal.hasVoted && getVoteStatusDisplay()}
+
+            {(isPending || isConfirming) && (
+                <div style={styles.loadingOverlay}>
+                    <div style={styles.loadingContent}>
+                        <div style={styles.loadingSpinner} />
+                        <span>{getLoadingMessage()}</span>
+                    </div>
                 </div>
             )}
         </div>
@@ -267,16 +283,48 @@ const styles = {
         fontWeight: 'bold' as const,
         fontSize: '16px',
     },
-    error: {
-        color: '#C62828',
-        backgroundColor: '#FFEBEE',
-        padding: '12px',
-        borderRadius: '8px',
-        fontSize: '14px',
-        marginTop: '12px',
+    errorContainer: {
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
+        padding: '12px',
+        borderRadius: '8px',
+        backgroundColor: '#FFEBEE',
+        color: '#C62828',
+    },
+    errorIcon: {
+        fontSize: '16px',
+        fontWeight: 'bold',
+    },
+    errorMessage: {
+        fontSize: '14px',
+    },
+    loadingOverlay: {
+        position: 'absolute' as const,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '12px',
+        zIndex: 10,
+    },
+    loadingContent: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        alignItems: 'center',
+        gap: '12px',
+    },
+    loadingSpinner: {
+        width: '24px',
+        height: '24px',
+        borderRadius: '50%',
+        border: '3px solid #1976D2',
+        borderTop: '3px solid transparent',
+        animation: 'spin 1s linear infinite',
     },
 };
 
